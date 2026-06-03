@@ -349,7 +349,7 @@ class StatusPanel:
         return card
 
     def _poll(self):
-        self.root.after(2000, self._poll)
+        self.root.after(1000, self._poll)
         if self._drag_id or self._editing:
             return
         sessions = read_sessions()
