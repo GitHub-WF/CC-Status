@@ -18,14 +18,8 @@ mkdir -p "$SCRIPTS_DIR" "$STATUS_DIR"
 cat > "$SCRIPTS_DIR/set-status.sh" << 'EOF'
 #!/bin/bash
 STATE_FILE="$HOME/.claude/status/${CLAUDE_CODE_SESSION_ID:0:8}.state"
-NEW_STATE="$1"
-if [ "$NEW_STATE" = "yellow" ] && [ -f "$STATE_FILE" ]; then
-  if grep -q '"state":"red"' "$STATE_FILE" 2>/dev/null; then
-    exit 0
-  fi
-fi
 mkdir -p "$HOME/.claude/status"
-printf '{"state":"%s","name":"%s"}' "$NEW_STATE" "$(basename "$PWD")" > "$STATE_FILE"
+printf '{"state":"%s","name":"%s"}' "$1" "$(basename "$PWD")" > "$STATE_FILE"
 EOF
 chmod +x "$SCRIPTS_DIR/set-status.sh"
 echo "[OK] 状态脚本: $SCRIPTS_DIR/set-status.sh"
