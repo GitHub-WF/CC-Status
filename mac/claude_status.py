@@ -112,19 +112,34 @@ def read_sessions():
 
 
 def create_tray_icon(sessions):
-    """Create a 16x16 icon with colored dots representing sessions"""
-    img = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    """Create a 32x32 icon with styled colored dots"""
+    size = 32
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
+    # Dark rounded background
+    draw.rounded_rectangle([0, 0, size - 1, size - 1], radius=6,
+                           fill="#2d2d2d", outline="#555555", width=1)
+
     if not sessions:
-        draw.ellipse([3, 3, 13, 13], fill="#4caf50")
+        draw.ellipse([9, 9, 23, 23], fill="#4caf50")
     else:
-        # Show dots for up to 4 sessions in a 2x2 grid
-        colors = [s["color"] for s in sessions[:4]]
-        positions = [(2, 2), (9, 2), (2, 9), (9, 9)]
-        for i, color in enumerate(colors):
-            x, y = positions[i]
-            draw.ellipse([x, y, x + 6, y + 6], fill=color)
+        n = min(len(sessions), 4)
+        colors = [s["color"] for s in sessions[:n]]
+        if n == 1:
+            draw.ellipse([9, 9, 23, 23], fill=colors[0])
+        elif n == 2:
+            draw.ellipse([4, 10, 16, 22], fill=colors[0])
+            draw.ellipse([16, 10, 28, 22], fill=colors[1])
+        elif n == 3:
+            draw.ellipse([4, 4, 14, 14], fill=colors[0])
+            draw.ellipse([18, 4, 28, 14], fill=colors[1])
+            draw.ellipse([11, 18, 21, 28], fill=colors[2])
+        else:
+            draw.ellipse([4, 4, 14, 14], fill=colors[0])
+            draw.ellipse([18, 4, 28, 14], fill=colors[1])
+            draw.ellipse([4, 18, 14, 28], fill=colors[2])
+            draw.ellipse([18, 18, 28, 28], fill=colors[3])
 
     return img
 
@@ -218,21 +233,21 @@ class StatusPanel:
         tk.Label(hdr, text="CC-Status", fg=TEXT_SEC, bg=HEADER_BG,
                  font=("Segoe UI Variable", 9)).pack(side="left")
 
-        # Minimize to tray button
-        self.min_lbl = tk.Label(hdr, text="  ─  ", fg=TEXT_MUTED, bg=HEADER_BG,
-                                font=("Segoe UI Variable", 9), cursor="hand2")
-        self.min_lbl.pack(side="right", padx=(0, 2))
-        self.min_lbl.bind("<Enter>", lambda e: self.min_lbl.config(fg=TEXT_PRI, bg="#3a3a3c"))
-        self.min_lbl.bind("<Leave>", lambda e: self.min_lbl.config(fg=TEXT_MUTED, bg=HEADER_BG))
-        self.min_lbl.bind("<Button-1>", lambda e: self._minimize_to_tray())
-
-        # Close button (minimize to tray)
+        # Close button (minimize to tray) - rightmost
         self.close_lbl = tk.Label(hdr, text="  ✕  ", fg=TEXT_MUTED, bg=HEADER_BG,
                                   font=("Segoe UI Variable", 9), cursor="hand2")
         self.close_lbl.pack(side="right", padx=(0, 2))
         self.close_lbl.bind("<Enter>", lambda e: self.close_lbl.config(fg=TEXT_PRI, bg="#c42b1c"))
         self.close_lbl.bind("<Leave>", lambda e: self.close_lbl.config(fg=TEXT_MUTED, bg=HEADER_BG))
         self.close_lbl.bind("<Button-1>", lambda e: self._minimize_to_tray())
+
+        # Minimize to tray button - left of close
+        self.min_lbl = tk.Label(hdr, text="  ─  ", fg=TEXT_MUTED, bg=HEADER_BG,
+                                font=("Segoe UI Variable", 9), cursor="hand2")
+        self.min_lbl.pack(side="right", padx=(0, 2))
+        self.min_lbl.bind("<Enter>", lambda e: self.min_lbl.config(fg=TEXT_PRI, bg="#3a3a3c"))
+        self.min_lbl.bind("<Leave>", lambda e: self.min_lbl.config(fg=TEXT_MUTED, bg=HEADER_BG))
+        self.min_lbl.bind("<Button-1>", lambda e: self._minimize_to_tray())
 
         self.header.bind("<Button-1>", self._win_start)
         self.header.bind("<B1-Motion>", self._win_move)
