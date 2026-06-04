@@ -1,20 +1,22 @@
 """
-Claude Code 状态显示器 - Windows 11 Fluent 风格
-Mica 亚克力、圆角卡片、Segoe UI Variable
+CC-Status v1.1.0 - Claude Code 状态显示器
+系统托盘 + 悬浮面板，×最小化到托盘，右键退出
 """
 import os
 import sys
 import json
 import time
 import glob
+import threading
 import tkinter as tk
 from pathlib import Path
+from PIL import Image, ImageDraw, ImageFont
+import pystray
 
 STATUS_DIR = os.path.join(Path.home(), ".claude", "status")
 PROJECTS_DIR = os.path.join(Path.home(), ".claude", "projects")
 NAMES_FILE = os.path.join(STATUS_DIR, "names.json")
 
-# Win11 Fluent colors
 BG = "#202020"
 CARD_BG = "#2d2d2d"
 CARD_HOVER = "#383838"
@@ -102,11 +104,29 @@ def read_sessions():
             info = STATUS_INFO.get(state, STATUS_INFO["green"])
             name = _custom_names.get(sid, titles.get(sid, sid))
             sessions.append({"id": sid, "name": name, "mtime": mtime,
-                             "text": info[0], "color": info[1]})
+                             "text": info[0], "color": info[1], "state": state})
         except:
             pass
     sessions.sort(key=lambda s: s["mtime"], reverse=True)
     return sessions
+
+
+def create_tray_icon(sessions):
+    """Create a 16x16 icon with colored dots representing sessions"""
+    img = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    if not sessions:
+        draw.ellipse([3, 3, 13, 13], fill="#4caf50")
+    else:
+        # Show dots for up to 4 sessions in a 2x2 grid
+        colors = [s["color"] for s in sessions[:4]]
+        positions = [(2, 2), (9, 2), (2, 9), (9, 9)]
+        for i, color in enumerate(colors):
+            x, y = positions[i]
+            draw.ellipse([x, y, x + 6, y + 6], fill=color)
+
+    return img
 
 
 class SessionCard:
@@ -121,52 +141,39 @@ class SessionCard:
         self.inner = tk.Frame(self.frame, bg=CARD_BG)
         self.inner.pack(fill="x", padx=10, pady=7)
 
-        # Dot
         self.dot_cv = tk.Canvas(self.inner, width=12, height=12,
                                 bg=CARD_BG, highlightthickness=0)
         self.dot_cv.pack(side="left", padx=(0, 8))
         self.dot_id = self.dot_cv.create_oval(1, 1, 11, 11, fill=session["color"], outline="")
 
-        # Name
         self.name_lbl = tk.Label(self.inner, text=session["name"][:22],
                                  fg=TEXT_PRI, bg=CARD_BG,
                                  font=("Segoe UI Variable", 10))
         self.name_lbl.pack(side="left")
 
-        # Status text
         self.state_lbl = tk.Label(self.inner, text=session["text"],
                                   fg=TEXT_MUTED, bg=CARD_BG,
                                   font=("Segoe UI Variable", 9))
         self.state_lbl.pack(side="right", padx=(4, 0))
 
-        # Close button
         self.close_lbl = tk.Label(self.inner, text="✕", fg=TEXT_MUTED, bg=CARD_BG,
                                   font=("Segoe UI Variable", 8), cursor="hand2")
         self.close_lbl.pack(side="right", padx=(0, 8))
-        self.close_lbl.bind("<Enter>", lambda e: close_lbl.config(fg=TEXT_SEC))
-        self.close_lbl.bind("<Leave>", lambda e: close_lbl.config(fg=TEXT_MUTED))
+        self.close_lbl.bind("<Enter>", lambda e: self.close_lbl.config(fg=TEXT_SEC))
+        self.close_lbl.bind("<Leave>", lambda e: self.close_lbl.config(fg=TEXT_MUTED))
         self.close_lbl.bind("<Button-1>", lambda e, s=self.sid: panel._remove_session(s))
 
-        # Hover
         for w in (self.frame, self.inner, self.name_lbl, self.dot_cv, self.state_lbl):
             w.bind("<Enter>", self._enter)
             w.bind("<Leave>", self._leave)
 
     def _enter(self, e):
-        self.frame.config(bg=CARD_HOVER)
-        self.inner.config(bg=CARD_HOVER)
-        self.name_lbl.config(bg=CARD_HOVER)
-        self.dot_cv.config(bg=CARD_HOVER)
-        self.state_lbl.config(bg=CARD_HOVER)
-        self.close_lbl.config(bg=CARD_HOVER)
+        for w in (self.frame, self.inner, self.name_lbl, self.dot_cv, self.state_lbl, self.close_lbl):
+            w.config(bg=CARD_HOVER)
 
     def _leave(self, e):
-        self.frame.config(bg=CARD_BG)
-        self.inner.config(bg=CARD_BG)
-        self.name_lbl.config(bg=CARD_BG)
-        self.dot_cv.config(bg=CARD_BG)
-        self.state_lbl.config(bg=CARD_BG)
-        self.close_lbl.config(bg=CARD_BG)
+        for w in (self.frame, self.inner, self.name_lbl, self.dot_cv, self.state_lbl, self.close_lbl):
+            w.config(bg=CARD_BG)
 
     def update(self, session):
         self.color = session["color"]
@@ -181,7 +188,7 @@ class SessionCard:
 class StatusPanel:
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title("ClaudeStatus")
+        self.root.title("CC-Status")
         self.root.overrideredirect(True)
         self.root.attributes("-topmost", True)
         self.root.attributes("-alpha", 0.92)
@@ -193,43 +200,51 @@ class StatusPanel:
         self._drag_id = None
         self._win_drag = {"x": 0, "y": 0}
         self._editing = None
+        self._visible = True
+        self._tray_icon = None
 
         # Outer
         self.outer = tk.Frame(self.root, bg=BG,
                               highlightthickness=1, highlightbackground=BORDER)
         self.outer.pack(fill="both", expand=True)
 
-        # ── Header ──
+        # Header
         self.header = tk.Frame(self.outer, bg=HEADER_BG, cursor="fleur")
         self.header.pack(fill="x")
 
         hdr = tk.Frame(self.header, bg=HEADER_BG)
         hdr.pack(fill="x", padx=12, pady=6)
 
-        tk.Label(hdr, text="Claude 状态", fg=TEXT_SEC, bg=HEADER_BG,
+        tk.Label(hdr, text="CC-Status", fg=TEXT_SEC, bg=HEADER_BG,
                  font=("Segoe UI Variable", 9)).pack(side="left")
 
-        # Win11 style close button
+        # Minimize to tray button
+        self.min_lbl = tk.Label(hdr, text="  ─  ", fg=TEXT_MUTED, bg=HEADER_BG,
+                                font=("Segoe UI Variable", 9), cursor="hand2")
+        self.min_lbl.pack(side="right", padx=(0, 2))
+        self.min_lbl.bind("<Enter>", lambda e: self.min_lbl.config(fg=TEXT_PRI, bg="#3a3a3c"))
+        self.min_lbl.bind("<Leave>", lambda e: self.min_lbl.config(fg=TEXT_MUTED, bg=HEADER_BG))
+        self.min_lbl.bind("<Button-1>", lambda e: self._minimize_to_tray())
+
+        # Close button (minimize to tray)
         self.close_lbl = tk.Label(hdr, text="  ✕  ", fg=TEXT_MUTED, bg=HEADER_BG,
                                   font=("Segoe UI Variable", 9), cursor="hand2")
-        self.close_lbl.pack(side="right")
+        self.close_lbl.pack(side="right", padx=(0, 2))
         self.close_lbl.bind("<Enter>", lambda e: self.close_lbl.config(fg=TEXT_PRI, bg="#c42b1c"))
         self.close_lbl.bind("<Leave>", lambda e: self.close_lbl.config(fg=TEXT_MUTED, bg=HEADER_BG))
-        self.close_lbl.bind("<Button-1>", lambda e: self._quit())
+        self.close_lbl.bind("<Button-1>", lambda e: self._minimize_to_tray())
 
         self.header.bind("<Button-1>", self._win_start)
         self.header.bind("<B1-Motion>", self._win_move)
         hdr.bind("<Button-1>", self._win_start)
         hdr.bind("<B1-Motion>", self._win_move)
 
-        # ── List ──
+        # List
         self.list_frame = tk.Frame(self.outer, bg=BG)
         self.list_frame.pack(fill="both", expand=True, pady=(6, 0))
-
-        # Bottom
         tk.Frame(self.outer, bg=BG, height=6).pack(fill="x")
 
-        # ── Menu ──
+        # Context menu
         self.menu = tk.Menu(self.root, tearoff=0,
                            bg=CARD_BG, fg=TEXT_PRI,
                            activebackground=ACCENT, activeforeground="#000000",
@@ -237,7 +252,7 @@ class StatusPanel:
         self.menu.add_command(label="  置顶", command=self._toggle_topmost)
         self.menu.add_command(label="  清除全部", command=self._clear_all)
         self.menu.add_separator()
-        self.menu.add_command(label="  关闭", command=self._quit)
+        self.menu.add_command(label="  退出", command=self._quit)
         self.outer.bind("<Button-3>", self._show_menu)
         self.list_frame.bind("<Button-3>", self._show_menu)
 
@@ -247,7 +262,41 @@ class StatusPanel:
         sh = self.root.winfo_screenheight()
         self.root.geometry(f"280x60+{sw - 300}+{sh - 120}")
 
+        # Start tray in background
+        self._start_tray()
+
+        # Start polling
         self._poll()
+
+    def _start_tray(self):
+        def run_tray():
+            img = create_tray_icon([])
+            menu = pystray.Menu(
+                pystray.MenuItem("显示面板", lambda: self.root.after(0, self._show_from_tray), default=True),
+                pystray.Menu.SEPARATOR,
+                pystray.MenuItem("退出 CC-Status", lambda: self.root.after(0, self._quit))
+            )
+            self._tray_icon = pystray.Icon("CC-Status", img, "CC-Status", menu)
+            self._tray_icon.run()
+
+        t = threading.Thread(target=run_tray, daemon=True)
+        t.start()
+
+    def _update_tray_icon(self, sessions):
+        if self._tray_icon:
+            try:
+                self._tray_icon.icon = create_tray_icon(sessions)
+            except:
+                pass
+
+    def _minimize_to_tray(self):
+        self.root.withdraw()
+        self._visible = False
+
+    def _show_from_tray(self):
+        self.root.deiconify()
+        self.root.lift()
+        self._visible = True
 
     def _win_start(self, e):
         self._win_drag = {"x": e.x_root, "y": e.y_root}
@@ -353,6 +402,7 @@ class StatusPanel:
         if self._drag_id or self._editing:
             return
         sessions = read_sessions()
+        self._update_tray_icon(sessions)
         for s in sessions:
             sid = s["id"]
             if sid in self.cards:
@@ -381,6 +431,8 @@ class StatusPanel:
         self.root.attributes("-topmost", self.always_on_top)
 
     def _quit(self):
+        if self._tray_icon:
+            self._tray_icon.stop()
         self.root.destroy()
         sys.exit(0)
 
