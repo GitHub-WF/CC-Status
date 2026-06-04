@@ -1,25 +1,36 @@
-# CC-Status v1.0.0
+# CC-Status v1.1.0
 
 Claude Code 桌面状态显示器，实时显示多个会话的工作状态。
 
 ## 功能
 
-- 红 / 黄 / 绿三色状态指示
+- 红 / 黄 / 绿三色状态指示，实时同步 Claude Code 状态
 - 多会话同时显示，自动识别会话名
+- 系统托盘图标，彩色圆点显示会话状态
+- × 最小化到托盘，托盘右键退出
 - 双击名称可重命名
 - 拖拽排序
 - 窗口置顶
-- 60 秒无活动自动清除
+- 每个会话独立关闭按钮
 
 ## 安装
 
 ### Windows
 
-直接运行 `win/CC-Status.exe`。
+1. 运行一键配置脚本（只需一次）：
+
+```bash
+bash setup.sh
+```
+
+2. 重启 VSCode
+
+3. 运行 `win/CC-Status.exe`
 
 ### Mac
 
 ```bash
+bash setup.sh
 cd mac
 bash build.sh
 ./CC-Status
@@ -34,8 +45,10 @@ Mac 需要先安装 Python3：`brew install python3`
 3. 左键拖拽面板标题栏移动位置
 4. 左键拖拽色块上下排列顺序
 5. 双击名称可重命名
-6. 右键菜单：置顶 / 清除全部 / 关闭
-7. 每个色块右侧 × 按钮关闭单个会话
+6. 每个色块右侧 × 按钮移除单个会话
+7. 标题栏 ─ 或 × 最小化到系统托盘
+8. 托盘图标右键：显示面板 / 退出
+9. 面板右键菜单：置顶 / 清除全部 / 退出
 
 ## 状态说明
 
@@ -45,30 +58,16 @@ Mac 需要先安装 Python3：`brew install python3`
 | 黄色 | 思考中（工具调用 / 处理中） |
 | 绿色 | 空闲（等待输入） |
 
-## 依赖
-
-Claude Code 需要配置以下 hooks（写入 `~/.claude/settings.json`）：
-
-```json
-{
-  "hooks": {
-    "PreToolUse": [{ "matcher": "", "hooks": [{ "type": "command", "command": "mkdir -p \"$HOME/.claude/status\" && echo '{\"state\":\"yellow\"}' > \"$HOME/.claude/status/${CLAUDE_CODE_SESSION_ID:0:8}.state\"" }] }],
-    "Stop": [{ "matcher": "", "hooks": [{ "type": "command", "command": "mkdir -p \"$HOME/.claude/status\" && echo '{\"state\":\"green\"}' > \"$HOME/.claude/status/${CLAUDE_CODE_SESSION_ID:0:8}.state\"" }] }],
-    "Notification": [{ "matcher": "", "hooks": [{ "type": "command", "command": "mkdir -p \"$HOME/.claude/status\" && echo '{\"state\":\"red\"}' > \"$HOME/.claude/status/${CLAUDE_CODE_SESSION_ID:0:8}.state\"" }] }],
-    "UserPromptSubmit": [{ "matcher": "", "hooks": [{ "type": "command", "command": "mkdir -p \"$HOME/.claude/status\" && echo '{\"state\":\"yellow\"}' > \"$HOME/.claude/status/${CLAUDE_CODE_SESSION_ID:0:8}.state\"" }] }]
-  }
-}
-```
-
 ## 文件说明
 
 ```
 CC-Status/
 ├── win/
-│   └── CC-Status.exe        # Windows 可执行文件
+│   └── CC-Status.exe          # Windows 可执行文件
 ├── mac/
-│   ├── claude_status.py     # Python 源码
-│   └── build.sh             # Mac 构建脚本
+│   ├── claude_status.py       # Python 源码
+│   └── build.sh               # Mac 构建脚本
+├── setup.sh                   # 一键配置 hooks 脚本
 └── README.md
 ```
 
@@ -76,6 +75,7 @@ CC-Status/
 
 - `~/.claude/status/*.state` — 会话状态文件
 - `~/.claude/status/names.json` — 自定义会话名
+- `~/.claude/scripts/set-status.sh` — 状态切换脚本
 
 ## License
 

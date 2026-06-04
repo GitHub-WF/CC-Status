@@ -418,7 +418,10 @@ class StatusPanel:
         if self._drag_id or self._editing:
             return
         sessions = read_sessions()
-        self._update_tray_icon(sessions)
+        # Reorder to match panel order
+        session_map = {s["id"]: s for s in sessions}
+        ordered = [session_map[sid] for sid in self.order if sid in session_map]
+        self._update_tray_icon(ordered)
         for s in sessions:
             sid = s["id"]
             if sid in self.cards:
