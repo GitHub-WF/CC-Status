@@ -112,34 +112,35 @@ def read_sessions():
 
 
 def create_tray_icon(sessions):
-    """Create a 32x32 icon with styled colored dots"""
-    size = 32
-    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    """Create a 32x32 icon with spaced colored dots"""
+    S = 32
+    img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
-    # Dark rounded background
-    draw.rounded_rectangle([0, 0, size - 1, size - 1], radius=6,
+    draw.rounded_rectangle([0, 0, S - 1, S - 1], radius=6,
                            fill="#2d2d2d", outline="#555555", width=1)
 
     if not sessions:
         draw.ellipse([9, 9, 23, 23], fill="#4caf50")
+        return img
+
+    n = min(len(sessions), 4)
+    colors = [s["color"] for s in sessions[:n]]
+
+    if n == 1:
+        draw.ellipse([8, 8, 24, 24], fill=colors[0])
+    elif n == 2:
+        draw.ellipse([3, 9, 15, 21], fill=colors[0])
+        draw.ellipse([17, 9, 29, 21], fill=colors[1])
+    elif n == 3:
+        draw.ellipse([3, 3, 13, 13], fill=colors[0])
+        draw.ellipse([19, 3, 29, 13], fill=colors[1])
+        draw.ellipse([11, 19, 21, 29], fill=colors[2])
     else:
-        n = min(len(sessions), 4)
-        colors = [s["color"] for s in sessions[:n]]
-        if n == 1:
-            draw.ellipse([9, 9, 23, 23], fill=colors[0])
-        elif n == 2:
-            draw.ellipse([4, 10, 16, 22], fill=colors[0])
-            draw.ellipse([16, 10, 28, 22], fill=colors[1])
-        elif n == 3:
-            draw.ellipse([4, 4, 14, 14], fill=colors[0])
-            draw.ellipse([18, 4, 28, 14], fill=colors[1])
-            draw.ellipse([11, 18, 21, 28], fill=colors[2])
-        else:
-            draw.ellipse([4, 4, 14, 14], fill=colors[0])
-            draw.ellipse([18, 4, 28, 14], fill=colors[1])
-            draw.ellipse([4, 18, 14, 28], fill=colors[2])
-            draw.ellipse([18, 18, 28, 28], fill=colors[3])
+        draw.ellipse([3, 3, 13, 13], fill=colors[0])
+        draw.ellipse([19, 3, 29, 13], fill=colors[1])
+        draw.ellipse([3, 19, 13, 29], fill=colors[2])
+        draw.ellipse([19, 19, 29, 29], fill=colors[3])
 
     return img
 
